@@ -6,6 +6,8 @@ services:
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
+    expose:
+      - "8080"
     sysctls:
       net.ipv4.ip_forward: 1
       net.ipv4.conf.all.src_valid_mark: 1
@@ -23,6 +25,8 @@ services:
     restart: unless-stopped
     depends_on:
       - headscale
+    expose:
+      - "3000"
     volumes:
       # Persistent Headplane data
       - headplane-data:/var/lib/headplane
