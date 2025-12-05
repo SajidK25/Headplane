@@ -1,11 +1,11 @@
 services:
   headscale:
-    build: ./headscale
+    build: ./headplane/headscale
     container_name: headscale
     restart: unless-stopped
     volumes:
       - headscale_data:/var/lib/headscale
-      - ./headscale/data:/var/lib/headscale
+      - ./headplane/headscale/data:/var/lib/headscale
     ports:
       - "8081:8080"
     command: serve
