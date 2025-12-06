@@ -1,7 +1,7 @@
 # Headplane
 
 - Goto Coolify Dashboard and Click on the Terminal tab from left sidebar menu
-- Select localhost from the dropdwon
+- Select localhost from the dropdown
 - when terminal open then execute `docker ps` to list the all running containers
 ```
 root@jenkin-master:~# docker ps
