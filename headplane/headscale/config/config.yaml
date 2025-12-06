@@ -11,7 +11,7 @@
 # https://myheadscale.example.com:443
 #
 log_level: info
-server_url: https://localhost:8080 # https://headscale.t99ltd.com
+server_url: https://headscale.t99ltd.com # https://localhost:8080 # https://headscale.t99ltd.com
 
 # Address to listen to / bind to on the server
 #

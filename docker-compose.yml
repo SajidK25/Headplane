@@ -45,12 +45,14 @@ services:
       - SERVICE_URL_HEADPLANE_3000
       # Example: generate a per-service password / random secret
       - SERVICE_SPECIFIC_PASSWORD=${SERVICE_PASSWORD_HEADPLANE}
+    labels:
+      - "me.tale.headplane.target=headscale"
     healthcheck:
       test:
         - CMD
-        - node
+        - /nodejs/bin/node
         - '-e'
-        - "fetch('http://127.0.0.1:3000').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1));"
+        - "fetch('http://127.0.0.1:3000/admin').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1));"
       interval: 30s
       timeout: 5s
       retries: 5

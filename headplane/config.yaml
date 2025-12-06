@@ -7,7 +7,7 @@ server:
   # The secret used to encode and decode web sessions (must be 32 characters)
   # You may also provide `cookie_secret_path` instead to read a value from disk.
   # See https://headplane.net/configuration/#sensitive-values
-  cookie_secret: "<change_me_to_something_secure!>"
+  cookie_secret: "<change_me_to_something_secure!>" # REPLACE_WITH_32_CHAR_SECRET_HERE
 
   # Whether cookies should be marked as Secure
   # * Should be false if running without HTTPs
@@ -38,7 +38,8 @@ headscale:
   # (THIS IS NOT the gRPC endpoint, but the HTTP endpoint)
   #
   # IMPORTANT: If you are using TLS this MUST be set to `https://`
-  url: "http://headscale:8080"
+  url: "https://headscale.t99ltd.com"
+  public_url: "https://headscale.t99ltd.com"
 
   # If you use the TLS configuration in Headscale, and you are not using
   # Let's Encrypt for your certificate, pass in the path to the certificate.
@@ -108,7 +109,7 @@ integration:
   # This does not include the agent integration (above), which can be enabled
   # at the same time as any of these and is recommended for the best experience.
   docker:
-    enabled: false
+    enabled: true
 
     # By default we check for the presence of a container label (see the docs)
     # to determine the container to signal when changes are made to DNS settings.
