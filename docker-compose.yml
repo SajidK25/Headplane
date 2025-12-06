@@ -1,20 +1,24 @@
 services:
   headscale:
-    image: 'headscale/headscale:stable'
+    build: ./headplane/headscale
     restart: unless-stopped
     command: serve
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
+    expose:
+      - "8080"
     sysctls:
       net.ipv4.ip_forward: 1
       net.ipv4.conf.all.src_valid_mark: 1
     volumes:
-      - 'headscale-data:/var/lib/headscale'
-      - './headscale/config.yaml:/etc/headscale/config.yaml'
+      # Persistent Headscale data
+      - headscale-data:/var/lib/headscale
     environment:
+      # Expose Headscale via Coolify proxy on its own subdomain (port 8080 in container)
       - SERVICE_URL_HEADSCALE_8080
-      - 'SERVICE_SPECIFIC_PASSWORD=${SERVICE_PASSWORD_HEADSCALE}'
+      # Optional: generate a reusable password / secret specifically for this service
+      - SERVICE_SPECIFIC_PASSWORD=${SERVICE_PASSWORD_HEADSCALE}
     healthcheck:
       test:
         - CMD
@@ -25,20 +29,22 @@ services:
       retries: 5
       start_period: 30s
   headplane:
-    image: 'ghcr.io/tale/headplane:latest'
+    build: ./headplane
     restart: unless-stopped
     depends_on:
       - headscale
+    expose:
+      - "3000"
     volumes:
-      - 'headplane-data:/var/lib/headplane'
-      - '/var/run/docker.sock:/var/run/docker.sock:ro'
-      - './headplane/config.yaml:/etc/headplane/config.yaml'
-      - './headscale/config.yaml:/etc/headscale/config.yaml'
+      # Persistent Headplane data
+      - headplane-data:/var/lib/headplane
+      # Docker socket (read-only) for integration features
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
+      # Expose Headplane UI via Coolify proxy on port 3000
       - SERVICE_URL_HEADPLANE_3000
-      - 'SERVICE_SPECIFIC_PASSWORD=${SERVICE_PASSWORD_HEADPLANE}'
-    labels:
-      - me.tale.headplane.target=headscale
+      # Example: generate a per-service password / random secret
+      - SERVICE_SPECIFIC_PASSWORD=${SERVICE_PASSWORD_HEADPLANE}
     healthcheck:
       test:
         - CMD
