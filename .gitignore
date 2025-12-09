@@ -1,3 +1,4 @@
 headscale/lib/
-headscale/data/
+headscale/data/*
+headplane/headscale/data/db.sqlite
 headplane/headplane-data/*.db
