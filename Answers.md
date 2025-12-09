@@ -34,4 +34,4 @@ services:
 
 ## About tailscale up --login-server=http://headscale:8080 issue
 
-- Fixed From now it will show `tailscale up --login-server=<Headscale_URL>`
+- Fixed! From now it will show `tailscale up --login-server=<Headscale_URL>`
