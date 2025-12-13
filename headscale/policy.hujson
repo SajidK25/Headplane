@@ -1,0 +1,82 @@
+{
+  // Headscale ACL Policy for Coolify Deployment
+  // Groups and Tags define who can access what
+  // See: https://tailscale.com/kb/1018/acls/
+
+  // Define groups of users
+  "groups": {
+    "group:admins": ["admin@example.com"],
+    "group:dev": ["dev@example.com"],
+    "group:users": ["user@example.com"]
+  },
+
+  // Define tags that can be assigned to nodes
+  "tagOwners": {
+    // Admins can manage infrastructure tags
+    "tag:infra": ["group:admins"],
+    "tag:db": ["group:admins"],
+    "tag:router": ["group:admins"],
+    "tag:exit": ["group:admins"],
+    
+    // Devs can manage app tags
+    "tag:apps": ["group:admins", "group:dev"],
+    "tag:iot": ["group:admins", "group:dev"]
+  },
+
+  // Access Control Lists - who can reach what
+  "acls": [
+    // Admins can reach everything
+    {
+      "action": "accept",
+      "src": ["group:admins"],
+      "dst": ["*:*"]
+    },
+    
+    // Devs can reach app servers and databases
+    {
+      "action": "accept",
+      "src": ["group:dev"],
+      "dst": ["tag:apps:*", "tag:db:443,3306,5432"]
+    },
+    
+    // IoT devices can reach app servers
+    {
+      "action": "accept",
+      "src": ["tag:iot"],
+      "dst": ["tag:apps:*"]
+    },
+    
+    // Exit nodes allow internet routing
+    {
+      "action": "accept",
+      "src": ["group:admins", "group:dev"],
+      "dst": ["tag:exit:*"]
+    },
+    
+    // Default: deny all
+    {
+      "action": "deny",
+      "src": ["*"],
+      "dst": ["*:*"]
+    }
+  ],
+
+  // SSH access control (requires Tailscale SSH enabled)
+  "ssh": [
+    // Admins can SSH into any node
+    {
+      "action": "check",
+      "src": ["group:admins"],
+      "dst": ["tag:infra", "tag:apps"],
+      "users": ["root", "admin"]
+    },
+    
+    // Devs can SSH into app nodes only
+    {
+      "action": "check",
+      "src": ["group:dev"],
+      "dst": ["tag:apps"],
+      "users": ["appuser", "deploy"]
+    }
+  ]
+}
