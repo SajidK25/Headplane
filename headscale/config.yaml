@@ -1,0 +1,135 @@
+---
+# Headscale configuration for Coolify deployment
+# Environment variables are substituted at runtime
+
+# Server public URL (clients will connect to this)
+# Set via HEADSCALE_SERVER_URL env var
+server_url: https://headscale.megabyte.space
+
+# Log level: panic, fatal, error, warn, info, debug, trace
+log_level: info
+
+# Listen address for HTTP API
+listen_addr: 0.0.0.0:8080
+
+# Metrics endpoint (internal use)
+metrics_listen_addr: 127.0.0.1:9090
+
+# gRPC admin interface (private, not exposed publicly)
+grpc_listen_addr: 127.0.0.1:50443
+grpc_allow_insecure: false
+
+# Noise protocol (TS2021) - auto-generated if missing
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+
+# IP prefix allocation for Tailscale clients
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
+
+# DERP relay servers
+derp:
+  server:
+    enabled: false
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  auto_update_enabled: true
+  update_frequency: 24h
+
+# Disable update checks on startup
+disable_check_updates: false
+
+# Ephemeral node timeout
+ephemeral_node_inactivity_timeout: 30m
+
+# Database configuration (PostgreSQL via env vars)
+# Note: Headscale supports both SQLite and PostgreSQL
+# For Coolify, we use PostgreSQL for better scalability
+database:
+  type: postgres
+  debug: false
+  gorm:
+    prepared_statement: true
+    parameterized_queries: true
+    skip_initializing_default_values: true
+    slow_threshold: 1000
+  postgres:
+    # Use environment variables for credentials
+    host: ${HEADSCALE_DB_HOST:-postgres}
+    port: ${HEADSCALE_DB_PORT:-5432}
+    name: ${HEADSCALE_DB_NAME:-headscale}
+    user: ${HEADSCALE_DB_USER:-headscale}
+    pass: ${HEADSCALE_DB_PASS}
+    max_open_conns: 10
+    max_idle_conns: 10
+    conn_max_idle_time_secs: 3600
+    sslmode: disable
+
+# TLS Configuration
+# Traefik handles TLS termination, so we don't enable ACME here
+# No need for Let's Encrypt as Coolify/Traefik manages certs
+tls_letsencrypt_hostname: ""
+tls_cert_path: ""
+tls_key_path: ""
+
+# Logging format
+log:
+  format: text
+
+# ACL Policy - loaded from file
+policy:
+  mode: file
+  path: /etc/headscale/policy.hujson
+
+# DNS Configuration with MagicDNS
+dns:
+  # Enable MagicDNS for automatic DNS names
+  magic_dns: true
+  
+  # Base domain for MagicDNS
+  # Nodes will get DNS names like: nodename.username.tail.megabyte.space
+  base_domain: tail.megabyte.space
+  
+  # Use user namespace in DNS (important for multi-user setups)
+  # This ensures each user's nodes get their own namespace
+  nameservers:
+    - 127.0.0.1
+  
+  # Optional: Custom DNS records
+  # extra_records_path: /var/lib/headscale/extra_records.json
+
+# Unix socket for CLI communication
+unix_socket: /var/run/headscale/headscale.sock
+unix_socket_permission: "0770"
+
+# OpenID Connect (OIDC) Configuration with Authentik
+oidc:
+  # Only start if OIDC is available
+  only_start_if_oidc_is_available: false
+  
+  # Authentik OIDC issuer URL
+  issuer: ${HEADSCALE_OIDC_ISSUER:-https://authentik.megabyte.space/application/o/headscale/}
+  
+  # OIDC Client ID (from Authentik)
+  client_id: ${HEADSCALE_OIDC_CLIENT_ID}
+  
+  # OIDC Client Secret (from Authentik)
+  client_secret: ${HEADSCALE_OIDC_CLIENT_SECRET}
+  
+  # Token expiry (how long users stay authenticated)
+  expiry: 180d
+  
+  # Don't use token expiry from provider (use above instead)
+  use_expiry_from_token: false
+  
+  # OIDC scopes
+  scope: ["openid", "profile", "email"]
+
+# Disable logtail (Tailscale's logging infrastructure)
+logtail:
+  enabled: false
+
+# Randomize WireGuard client port (useful for some firewalls)
+randomize_client_port: false

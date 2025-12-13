@@ -1,63 +1,86 @@
+version: "3.8"
+
 services:
-  headscale:
-    build: ./headplane/headscale
+  postgres:
+    image: postgres:16-alpine
     restart: unless-stopped
-    command: serve
-    cap_add:
-      - NET_ADMIN
-      - SYS_MODULE
-    expose:
-      - "8080"
-    sysctls:
-      net.ipv4.ip_forward: 1
-      net.ipv4.conf.all.src_valid_mark: 1
-    volumes:
-      # Persistent Headscale data
-      - headscale-data:/var/lib/headscale
     environment:
-      # Expose Headscale via Coolify proxy on its own subdomain (port 8080 in container)
-      - SERVICE_URL_HEADSCALE_8080
-      # Optional: generate a reusable password / secret specifically for this service
-      - SERVICE_SPECIFIC_PASSWORD=${SERVICE_PASSWORD_HEADSCALE}
+      POSTGRES_DB: ${DB_NAME:-headscale}
+      POSTGRES_USER: ${DB_USER:-headscale}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test:
-        - CMD
-        - headscale
-        - health
-      interval: 30s
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-headscale}"]
+      interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+
+  headscale:
+    image: headscale/headscale:stable
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    command: serve
+    volumes:
+      - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
+      - ./headscale/policy.hujson:/etc/headscale/policy.hujson:ro
+      - headscale_data:/var/lib/headscale
+    environment:
+      - TZ=${TIMEZONE:-America/New_York}
+      - HEADSCALE_LOG_LEVEL=${LOG_LEVEL:-info}
+      - HEADSCALE_SERVER_URL=${SERVICE_FQDN:-https://headscale.example.com}
+      - HEADSCALE_DB_TYPE=postgres
+      - HEADSCALE_DB_HOST=${DB_HOST:-postgres}
+      - HEADSCALE_DB_PORT=${DB_PORT:-5432}
+      - HEADSCALE_DB_NAME=${DB_NAME:-headscale}
+      - HEADSCALE_DB_USER=${DB_USER:-headscale}
+      - HEADSCALE_DB_PASS=${DB_PASSWORD:-password}
+      - HEADSCALE_OIDC_ISSUER=${OIDC_ISSUER}
+      - HEADSCALE_OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
+      - HEADSCALE_OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
+    healthcheck:
+      test: ["CMD", "headscale", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.headscale.rule=Host(`${SERVICE_FQDN}`)"
+      - "traefik.http.routers.headscale.entrypoints=https"
+      - "traefik.http.routers.headscale.tls=true"
+      - "traefik.http.services.headscale.loadbalancer.server.port=8080"
+
   headplane:
-    build: ./headplane
+    image: ghcr.io/tale/headplane:latest
     restart: unless-stopped
     depends_on:
       - headscale
-    expose:
-      - "3000"
     volumes:
-      # Persistent Headplane data
-      - headplane-data:/var/lib/headplane
-      # Docker socket (read-only) for integration features
+      - ./headplane/config.yaml:/etc/headplane/config.yaml:ro
+      - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
+      - headplane_data:/var/lib/headplane
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      # Expose Headplane UI via Coolify proxy on port 3000
-      - SERVICE_URL_HEADPLANE_3000
-      # Example: generate a per-service password / random secret
-      - SERVICE_SPECIFIC_PASSWORD=${SERVICE_PASSWORD_HEADPLANE}
-    labels:
-      - "me.tale.headplane.target=headscale"
+      - TZ=${TIMEZONE:-America/New_York}
+      - HEADSCALE_URL=http://headscale:8080
+      - HEADPLANE_COOKIE_SECRET=${HEADPLANE_COOKIE_SECRET:-changeme32characterssecretkey}
     healthcheck:
-      test:
-        - CMD
-        - /nodejs/bin/node
-        - '-e'
-        - "fetch('http://127.0.0.1:3000/admin').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1));"
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
       interval: 30s
       timeout: 5s
-      retries: 5
-      start_period: 45s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.headplane.rule=Host(`${SERVICE_FQDN_HEADPLANE}`)"
+      - "traefik.http.routers.headplane.entrypoints=https"
+      - "traefik.http.routers.headplane.tls=true"
+      - "traefik.http.services.headplane.loadbalancer.server.port=3000"
+      - "me.tale.headplane.target=headscale"
 
 volumes:
-  headscale-data:
-  headplane-data:
+  postgres_data:
+  headscale_data:
+  headplane_data:

@@ -1,3 +1,25 @@
-headscale/lib/
-headscale/data/
-headplane/headplane-data/*.db
+# Environment variables (should never be committed)
+.env
+.env.local
+.env.*.local
+
+# Docker volumes (local data)
+postgres_data/
+headscale_data/
+headplane_data/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+.tmp/
+*.tmp
