@@ -1,25 +1,161 @@
-# Headplane
+# Headscale + Headplane on Coolify
 
-- Goto Coolify Dashboard and Click on the Terminal tab from left sidebar menu
-- Select localhost from the dropdown
-- when terminal open then execute `docker ps` to list the all running containers
+Production-ready Tailscale control plane deployment with Authentik SSO and Traefik TLS.
+
+## Quick Setup
+
+| Step | Action |
+|------|--------|
+| 1 | Import Git repo: `https://github.com/SajidK25/Headplane.git` |
+| 2 | Set environment variables (see below) |
+| 3 | Map domains via `SERVICE_FQDN` variables |
+| 4 | Deploy and access via HTTPS |
+
+## Environment Variables
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `DB_PASSWORD` | Postgres password | Strong random string |
+| `OIDC_CLIENT_ID` | Authentik OAuth2 client ID | `headscale` |
+| `OIDC_CLIENT_SECRET` | Authentik OAuth2 secret | From Authentik provider |
+| `OIDC_ISSUER` | Authentik OIDC endpoint | `https://auth.domain.com/application/o/headscale/` |
+| `HEADPLANE_COOKIE_SECRET` | Session encryption key | `openssl rand -base64 32` |
+| `SERVICE_FQDN` | Headscale domain | `headscale.example.com` |
+| `SERVICE_FQDN_HEADPLANE` | Headplane domain | `headplane.example.com` |
+
+**Optional:**
+- `TIMEZONE` (default: `America/New_York`)
+- `LOG_LEVEL` (default: `info`)
+
+## Traefik Configuration
+
+Coolify automatically handles TLS and routing. Services:
+
+| Service | Port | Domain | Routing |
+|---------|------|--------|---------|
+| Headscale | 8080 | `${SERVICE_FQDN}` | HTTP→HTTPS + TLS |
+| Headplane | 3000 | `${SERVICE_FQDN_HEADPLANE}` | HTTP→HTTPS + TLS |
+| Postgres | 5432 | Internal | Not exposed |
+
+## Architecture
+
 ```
-root@jenkin-master:~# docker ps
-CONTAINER ID   IMAGE                                        COMMAND                  CREATED        STATUS                  PORTS                                                                                                                                                                NAMES
-67a41cc80ec3   uwo88og4o8o0kks0gcw84k84-headplane           "/nodejs/bin/node /a…"   3 hours ago    Up 3 hours (healthy)    3000/tcp                                                                                                                                                             headplane-uwo88og4o8o0kks0gcw84k84-130548131589
-4f3c692ff544   uwo88og4o8o0kks0gcw84k84-headscale           "/ko-app/headscale s…"   3 hours ago    Up 3 hours (healthy)    8080/tcp                                                                                                                                                             headscale-uwo88og4o8o0kks0gcw84k84-130548125347
-3d9819ba1a8e   traefik:v3.6                                 "/entrypoint.sh --pi…"   21 hours ago   Up 21 hours (healthy)   0.0.0.0:80->80/tcp, [::]:80->80/tcp, 0.0.0.0:443->443/tcp, [::]:443->443/tcp, 0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp, 0.0.0.0:443->443/udp, [::]:443->443/udp   coolify-proxy
-5daa0cff4f78   cloudflare/cloudflared:latest                "cloudflared --no-au…"   22 hours ago   Up 22 hours (healthy)                                                                                                                                                                        cloudflared-h80sowo00wwcsowggow44ck0
-f1a6129ead41   ghcr.io/coollabsio/sentinel:0.0.18           "/app/sentinel"          2 days ago     Up 16 hours (healthy)                                                                                                                                                                        coolify-sentinel
-59fc66ab812f   ghcr.io/coollabsio/coolify:4.0.0-beta.452    "docker-php-serversi…"   2 days ago     Up 2 days (healthy)     8000/tcp, 8443/tcp, 9000/tcp, 0.0.0.0:8000->8080/tcp, [::]:8000->8080/tcp                                                                                            coolify
-13820cc4c4a3   postgres:15-alpine                           "docker-entrypoint.s…"   2 days ago     Up 2 days (healthy)     5432/tcp                                                                                                                                                             coolify-db
-66f2358a6dc9   redis:7-alpine                               "docker-entrypoint.s…"   2 days ago     Up 2 days (healthy)     6379/tcp                                                                                                                                                             coolify-redis
-4189b921dbce   ghcr.io/coollabsio/coolify-realtime:1.0.10   "/bin/sh /soketi-ent…"   2 days ago     Up 2 days (healthy)     0.0.0.0:6001-6002->6001-6002/tcp, [::]:6001-6002->6001-6002/tcp                                                                                                      coolify-realtime
+    ┌──────────────────────┐
+    │ Coolify + Traefik    │
+    │ (TLS, Routing)       │
+    └─────────┬────────────┘
+        ┌─────┴────────┐
+        │              │
+    Headscale     Headplane
+    (8080)        (3000)
+        │              │
+        └─────┬────────┘
+              │
+         PostgreSQL
 ```
-- copy the name of Headscale container `headscale-uwo88og4o8o0kks0gcw84k84-130548125347` 
-- Execute this command to get Headscale apikey `docker exec -it headscale-uwo88og4o8o0kks0gcw84k84-130548125347 headscale apikey create`
+
+## File Structure
+
 ```
-# Headscale apikey 
-t3Xrw-z.3M1kevwRK0K06bab_65OmxhxaO2OqHbM
+.
+├── docker-compose.yml
+├── headscale/
+│   ├── config.yaml
+│   └── policy.hujson
+└── headplane/
+    └── config.yaml
 ```
-- Copy this apikey and use it as Headplane login password
+
+## Volumes
+
+Docker-managed (Coolify persists):
+
+| Volume | Purpose |
+|--------|---------|
+| `postgres_data` | Database |
+| `headscale_data` | VPN state & keys |
+| `headplane_data` | Web UI cache |
+
+Config files: read-only mounts from repo.
+
+## Authentik Setup
+
+### 1. Create Provider
+
+Admin → Applications → Providers → New OpenID Connect:
+- **Name**: `Headscale`
+- **Client ID**: `headscale`
+- **Redirect URI**: `https://${SERVICE_FQDN}/oidc/callback`
+- **Scopes**: `openid`, `profile`, `email`
+
+### 2. Create Application
+
+Admin → Applications → Applications:
+- **Name**: `Headscale`
+- **Provider**: Above
+- **Flow**: Default
+
+### 3. Set Coolify Env Vars
+
+```
+OIDC_CLIENT_ID=headscale
+OIDC_CLIENT_SECRET=<from-provider>
+OIDC_ISSUER=https://auth.domain.com/application/o/headscale/
+```
+
+## Connect Clients
+
+```bash
+tailscale up --login-server https://${SERVICE_FQDN}
+# Opens browser for Authentik SSO
+# Node registered as: nodename.user.tail.megabyte.space
+```
+
+## Configuration Files
+
+### `headscale/config.yaml`
+- Database: PostgreSQL (env vars)
+- OIDC: Authentik integration
+- MagicDNS: Base domain configured
+- ACL: From `policy.hujson`
+
+### `headscale/policy.hujson`
+- **Groups**: `admins`, `dev`
+- **Tags**: `infra`, `apps`, `db`, `iot`, `router`, `exit`
+- **Rules**: Hierarchical access control
+
+### `headplane/config.yaml`
+- Server: 0.0.0.0:3000
+- Headscale: Internal HTTP
+- Docker: Integration enabled
+
+## API Key Auth (Optional)
+
+```bash
+docker exec headscale headscale apikey create --expiration 999d
+# Use output as Headplane password
+```
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Won't start | Check logs: `docker logs <container>` |
+| OIDC fails | Verify redirect URI in Authentik matches `SERVICE_FQDN` |
+| Can't connect | Check firewall: ports 443 (HTTPS), UDP (WireGuard) |
+| DNS fails | Run: `tailscale set --accept-dns=true` |
+
+## Security
+
+- ✅ TLS via Traefik (Let's Encrypt)
+- ✅ OIDC (no hardcoded credentials)
+- ✅ gRPC on 127.0.0.1 only
+- ✅ Configs read-only mounted
+- ✅ Strong DB password required
+
+## Resources
+
+- [Headscale Docs](https://headscale.net/)
+- [Tailscale KB](https://tailscale.com/kb/)
+- [Authentik Docs](https://goauthentik.io/)
+- [Coolify Docs](https://coolify.io/)
